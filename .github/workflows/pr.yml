@@ -1,0 +1,64 @@
+# DashSplit PR checks — branch name, PR title + the fast part of tools/gate.sh (secrets, workflow lint, OSV, Semgrep).
+# Account safety (owner 2026-10-16): pull_request only (no push/schedule), one run per PR (older runs cancelled),
+# 20-minute cap, Linux only, read-only token. Never add cron, matrix fan-out, or macOS runners here.
+name: pr-checks
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+permissions:
+  contents: read
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  gate:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Branch name and PR title (rules/tools/git_rule.md)
+        env:
+          BRANCH: ${{ github.head_ref }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          T='feat|fix|perf|refactor|test|docs|design|chore|ci|build|revert'
+          if ! echo "$BRANCH" | grep -Eq "^(($T)/[a-z0-9]+(-[a-z0-9]+)*|release/[0-9]+\.[0-9]+)$"; then
+            echo "Branch must be <type>/short-name ($T) or release/X.Y: $BRANCH"
+            exit 1
+          fi
+          if ! printf '%s' "$TITLE" | grep -Eq "^($T)(\([a-z0-9-]+\))?!?: .*[^.]$"; then
+            echo "PR title must be Conventional Commits '<type>(scope)?: summary' without a final full stop: $TITLE"
+            exit 1
+          fi
+      - name: GATE PASS for the head commit, audit line on SDD changes (rules/tools/gate_rule.md, sdd_rule.md)
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if ! printf '%s' "$BODY" | grep -Fq "GATE PASS ($HEAD_SHA)"; then
+            echo "PR body must carry 'GATE PASS ($HEAD_SHA)' from running tools/gate.sh on the head commit"
+            exit 1
+          fi
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -q '^knowledge/sdd/'; then
+            if ! printf '%s' "$BODY" | grep -Eq '^Audit: .+'; then
+              echo "An SDD change needs an 'Audit: <who audited, what changed>' line in the PR body (independent audit)"
+              exit 1
+            fi
+          fi
+      - name: Install scanners (pinned)
+        run: |
+          B="$HOME/.local/bin"; mkdir -p "$B"; echo "$B" >> "$GITHUB_PATH"
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz -C "$B" gitleaks
+          curl -sSL -o "$B/osv-scanner" https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64
+          chmod +x "$B/osv-scanner"
+          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 "$B"
+          pipx install semgrep==1.181.0
+      - name: Gate
+        run: |
+          git fetch -q origin main
+          bash tools/gate.sh --ci

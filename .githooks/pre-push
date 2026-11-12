@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Copyright © 2026 DashSplit LLC. All rights reserved.
+# DashSplit pre-push (same in every repo; rule: rules/tools/git_rule.md). GitHub Free has no branch protection on
+# private repos, so this refuses pushing to main/master and branch names outside <type>/short-name or release/X.Y.
+TYPES='feat|fix|perf|refactor|test|docs|design|chore|ci|build|revert'
+while read -r local_ref local_sha remote_ref remote_sha; do
+  branch="${remote_ref#refs/heads/}"
+  case "$remote_ref" in refs/tags/*) continue ;; esac
+  if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+    echo "pre-push: '$branch' is protected — push a <type>/short-name branch and open a PR." >&2
+    exit 1
+  fi
+  if ! echo "$branch" | grep -Eq "^(($TYPES)/[a-z0-9]+(-[a-z0-9]+)*|release/[0-9]+\.[0-9]+)$"; then
+    echo "pre-push: branch '$branch' must be <type>/short-name ($TYPES; lower case, hyphens) or release/X.Y." >&2
+    exit 1
+  fi
+done
+exit 0

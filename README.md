@@ -1,16 +1,13 @@
-## Hi there 👋
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.png">
+    <img src="assets/banner-light.png" alt="DashSplit" width="640">
+  </picture>
+</p>
 
-<!--
-**dashsplit/dashsplit** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+<p align="center">
+  Split bills and trips with friends. Every feature free.<br>
+  Coming soon to Android, iOS and the web.
+</p>
 
-Here are some ideas to get you started:
-
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+<p align="center"><a href="https://dashsplit.com">dashsplit.com</a></p>

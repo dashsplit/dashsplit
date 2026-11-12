@@ -1,0 +1,10 @@
+#!/bin/bash
+# Copyright © 2026 DashSplit LLC. All rights reserved.
+# DashSplit pre-commit (same in every repo): no plain secret ever reaches git; files under secrets/ must be
+# SOPS-encrypted (vault).
+set -e
+if ! command -v gitleaks >/dev/null; then echo "pre-commit: gitleaks missing (brew install gitleaks)"; exit 1; fi
+gitleaks git --pre-commit --staged --no-banner --redact || { echo "pre-commit: gitleaks found a possible secret. Commit refused."; exit 1; }
+for f in $(git diff --cached --name-only --diff-filter=ACM | grep '^secrets/' || true); do
+  grep -q 'ENC\[' "$f" || grep -q '"sops"' "$f" || { echo "pre-commit: $f is not SOPS-encrypted. Run: sops -e -i $f"; exit 1; }
+done

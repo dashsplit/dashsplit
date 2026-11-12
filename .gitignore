@@ -1,0 +1,32 @@
+# Build outputs
+build/
+.gradle/
+*.class
+*.jar
+*.aar
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Local env overrides (credentials loaded via vault)
+.env
+local.properties
+google-services.json
+GoogleService-Info.plist
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Logs
+*.log
+.gate/
+
+# Builder trial screens (checking only)
+exports/trial/
