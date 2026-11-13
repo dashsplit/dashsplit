@@ -29,8 +29,9 @@ if ls .github/workflows/*.yml >/dev/null 2>&1; then
   step "actionlint" bash -c 'command -v actionlint >/dev/null || { echo "missing tool: actionlint"; exit 1; }; actionlint'
 fi
 
-# 2. Known-vulnerable dependencies (only when the repo has lockfiles/manifests)
-if ls package-lock.json pnpm-lock.yaml gradle/libs.versions.toml */build.gradle.kts build.gradle.kts requirements*.txt 2>/dev/null | grep -q .; then
+# 2. Known-vulnerable dependencies (only when the repo has lockfiles/manifests). `ls` fails when any one of the
+#    patterns is missing; with pipefail that would skip the scan, so its exit code is dropped and only its output counts.
+if { ls package-lock.json pnpm-lock.yaml gradle/libs.versions.toml */build.gradle.kts build.gradle.kts requirements*.txt 2>/dev/null || true; } | grep -q .; then
   step "osv-scanner" bash -c 'command -v osv-scanner >/dev/null || { echo "missing tool: osv-scanner"; exit 1; };
     osv-scanner scan source -r . ; rc=$?; [ $rc -eq 0 ] || [ $rc -eq 128 ]'   # 128 = no package sources
 fi
@@ -60,7 +61,9 @@ fi
 
 # 4. Kotlin / Gradle repos
 if [ -x ./gradlew ]; then
-  if ./gradlew -q tasks --all 2>/dev/null | grep -q "^qualityCheck"; then step "gradle qualityCheck" ./gradlew qualityCheck --no-daemon; fi
+  # the task list is read first: with pipefail, grep -q closing the pipe early could fail gradlew and skip the step
+  GRADLE_TASKS="$(./gradlew -q tasks --all 2>/dev/null || true)"
+  if grep -q "^qualityCheck" <<<"$GRADLE_TASKS"; then step "gradle qualityCheck" ./gradlew qualityCheck --no-daemon; fi
   step "gradle check" ./gradlew check --no-daemon
 fi
 
@@ -94,6 +97,14 @@ step "copyright line" bash -c '
 
 # 5d. SDDs follow rules/process/sdd_rule.md (format, diagrams, error codes, no open owner questions)
 if [ -d knowledge/sdd ] && [ -f tools/sdd_check.py ]; then step "SDD check" python3 tools/sdd_check.py knowledge/sdd; fi
+# 5e. One owner per API call across the SDDs, used calls exist, knowledge/sdd/api-index.md is current
+if [ -d knowledge/sdd ] && [ -f tools/api_index.py ]; then step "API index" python3 tools/api_index.py --check knowledge/sdd; fi
+# 5f. knowledge/sdd/sdd-digest.md (the short map every SDD session reads first) is current
+if [ -d knowledge/sdd ] && [ -f tools/sdd_digest.py ]; then step "SDD digest" python3 tools/sdd_digest.py --check knowledge/sdd; fi
+# 5g. No mechanical mismatch inside any SDD (messages, calls, codes, edge-case diagrams, switches)
+if [ -d knowledge/sdd ] && [ -f tools/sdd_consistency.py ]; then step "SDD consistency" python3 tools/sdd_consistency.py knowledge/sdd; fi
+# 5h. Every SDD has its Release line, Phase 1 SDDs name their Phase 2 parts, knowledge/sdd/release-phases.md is current
+if [ -d knowledge/sdd ] && [ -f tools/release_index.py ]; then step "Release index" python3 tools/release_index.py --check knowledge/sdd; fi
 
 # 6. Python tools and hooks: compile + unit tests
 if ls tools/*.py >/dev/null 2>&1; then step "python compile" python3 -m py_compile tools/*.py; fi
